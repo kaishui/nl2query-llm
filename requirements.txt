@@ -1,4 +1,10 @@
-langchain>=0.3.0
-langchain-openai>=0.2.0
+langchain>=1.0.0
+langchain-openai>=1.0.0
+langgraph>=1.0.0
 openai>=1.50.0
 pandas>=2.0.0
+
+# opencode 动态 SQL（可选，仅 adhoc 自由取数分支需要）
+# 需先启动 opencode server（默认 127.0.0.1:4010）
+# opencode-ai>=0.1.0
+

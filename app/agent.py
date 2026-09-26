@@ -16,6 +16,7 @@ from langchain_core.tools import tool
 
 from . import db, metrics
 from .attribution import attribute_nii
+from .opencode_sql import nl2sql
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +134,22 @@ def attribute_nii_between(
 TOOLS = [query_metric, attribute_nii_between]
 
 
+@tool
+def adhoc_query(question: str) -> str:
+    """针对无法用受治理指标回答的 ad-hoc 问题，走 opencode 动态生成 SQL。
+
+    仅当 query_metric / attribute_nii_between 覆盖不了用户需求时才调用。
+    参数 question 是用户的原始自然语言问题。
+
+    返回 JSON，含生成的 SQL、查询结果行，或错误信息。
+    """
+    result = nl2sql(question)
+    return json.dumps(result, ensure_ascii=False)
+
+
+TOOLS.append(adhoc_query)
+
+
 # ---------------------------------------------------------------------------
 # Agent 层
 # ---------------------------------------------------------------------------
@@ -149,7 +166,9 @@ def build_agent(llm):
         "你是银行 NII（净利息收入）智能分析助手。\n"
         "回答必须基于调用工具得到的真实数据，不得凭空编造数字。\n"
         "分析类问题（环比/同比变化、归因、为什么下降）应优先调用 attribute_nii_between 做归因分解。\n"
-        "取值类问题应调用 query_metric，且指标名必须来自受治理指标。\n\n"
+        "取值类问题应调用 query_metric，且指标名必须来自受治理指标。\n"
+        "只有当受治理指标（query_metric / attribute_nii_between）覆盖不了用户需求时，"
+        "才调用 adhoc_query 做自由取数。\n\n"
         + metrics.build_metrics_prompt()
     )
     return create_agent(
