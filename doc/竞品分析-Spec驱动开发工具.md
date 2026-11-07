@@ -1,152 +1,157 @@
 # Spec 驱动开发（SDD）工具竞品分析
 
-> 目标：评估将 Spec-Driven Development（SDD）方法引入 NII NL2Query 产品研发流程的可行性，梳理市面主流 SDD 工具（GitHub Spec Kit、OpenSpec、AWS Kiro、BMAD-METHOD 等），给出对比维度与选型建议。
-> 背景：本项目当前采用「LLM 不直写裸 SQL、SQL 由受治理指标口径确定性拼装」的核心设计原则——这与 SDD「意图即真相、规格即契约」的理念高度同构，值得系统性评估工具化落地。
+> 目标：以 **VS Code / IntelliJ IDEA 插件生态丰富度** 为核心维度，横向评估市面主流 Spec-Driven Development（SDD）工具（GitHub Spec Kit、OpenSpec、AWS Kiro、BMAD-METHOD 等），并给出对应的插件/工具链推荐。
+> 核心结论先行：**SDD 工具本身几乎都不以「独立插件」形态出现，而是通过斜杠命令（slash command）+ AI 编码助手插件落地**。因此「选 SDD 工具」≈「选它背后能跑的 AI 助手插件生态」。
 
 ---
 
-## 一、什么是 Spec-Driven Development（SDD）
+## 一、一个关键认知：SDD 工具 ≠ 插件，而是「命令层」
 
-**先写规格（Spec），再写代码**，与传统的「先编码、后补文档」相反。
+Spec Kit / OpenSpec 的本质是 **Markdown 规格文件 + 一组斜杠命令（slash command）+ CLI**，它们自己不渲染界面，而是把命令注入到 AI 编码助手里执行。
 
-- **规格是契约**：定义代码应该如何行为，是 AI Agent 生成、测试、验证代码的**唯一事实来源（source of truth）**。
-- **意图即真相**：GitHub 提出的范式转变——从「code is the source of truth」走向「intent is the source of truth」。
-- **解决的核心问题**：vibe coding（氛围式编码）的上下文漂移、需求偏差、不可审计。语言模型擅长「模式补全」，不擅长「读心术」，规格把隐性意图显式化。
+| 层 | 组成 | 举例 |
+|---|---|---|
+| **命令层（SDD 工具）** | 斜杠命令 + 规格模板 + 目录结构 | `/speckit:specify`、`/opsx:propose` |
+| **执行层（AI 助手插件）** | 真正读规格、写代码的 Agent | Claude Code、Copilot、Junie、Codex |
+| **承载层（编辑器）** | 插件跑在哪 | VS Code、IntelliJ IDEA、Cursor |
 
-### 与本项目的契合点
-
-| 本项目原则 | SDD 对应机制 |
-|---|---|
-| LLM 只做意图识别，SQL 由代码确定性拼装 | 规格约束 Agent 行为，Agent 不「自由发挥」 |
-| 受治理指标口径（metrics.py） | 规格作为可验证的工程产物（而非一次性文档） |
-| 高危 SQL 人工审批（human-in-the-loop） | 阶段检查点 + 人工 review 规格 |
-| 显式状态图、可审计节点 | 变更可追踪、可版本化、可审计 |
+**所以真正的决策点是：你的团队用 VS Code 还是 IntelliJ IDEA？这个平台上哪个 AI 助手插件最成熟？SDD 工具对它的支持度如何？**
 
 ---
 
-## 二、竞品全景
+## 二、主流 SDD 工具插件生态对比（核心）
 
-| 类别 | 代表工具 | 本质 | 一句话定位 |
-|---|---|---|---|
-| **① 方法论 + CLI 工具包** | GitHub Spec Kit、OpenSpec | 规格先行的工作流，落成 CLI + slash 命令 | 把「写清楚再动手」固化成流程 |
-| **② 集成式 Agentic IDE** | AWS Kiro | 把 SDD 做成 IDE 一等公民 | 换 IDE 换来的端到端集成 |
-| **③ 多 Agent 团队模拟** | BMAD-METHOD | 模拟完整敏捷团队产出 PRD/架构/故事 | 最重的仪式感，最全的纸面留痕 |
-| **④ 轻量标准注入** | Agent OS | 在既有代码上注入团队规范（advisory） | 让 Agent 不再对抗你的 house rules |
-| **⑤ 规格即平台（前瞻）** | Tessl（closed beta） | 以 spec-as-source 为核心建平台 | 观察项，尚不可生产使用 |
-| **⑥ 语言/框架绑定 BDD 门禁** | CodeMySpec | Phoenix/Elixir，强制 BDD 门禁 + QA Agent | 垂直场景的强制验证 |
-
----
-
-## 三、核心对比维度
-
-### A. 工作流与产物
-
-1. **阶段划分** — 几阶段？Spec Kit 是四阶段（specify→plan→tasks→implement），OpenSpec 是「变更增量」模型（change→artifacts→implement→archive）。
-2. **规格格式** — 结构化 Markdown（OpenSpec 用 SHALL/MUST + WHEN/THEN 场景）vs 自由散文。
-3. **变更管理模型** — 全量重写 vs 增量（ADDED/MODIFIED/REMOVED/RENAMED，OpenSpec 类似数据库迁移）。
-4. **宪法/规范继承** — 项目级规则集是否被每个 spec 自动继承（Spec Kit 的 constitution 是核心）。
-
-### B. 强制力与验证（关键分水岭）
-
-5. **规格是否「约束」代码** — 多数工具只是「生成 spec 然后甩给另一个 Agent」，规格不被强制执行的只是「文档」，文档会漂移。
-6. **验证门禁** — 有无内置 verify（OpenSpec 的 validate 是结构化检查，非阻塞；CodeMySpec 是强制 BDD 门禁）。
-7. **spec drift 治理** — 规格漂移谁来管（多靠人工）。
-
-### C. 工程化与集成
-
-8. **Agent 兼容性** — 支持多少个 AI 编码助手（Spec Kit ~30 个，OpenSpec 多工具，Kiro 绑定自家 IDE）。
-9. **安装/分发** — 独立二进制（OpenSpec 8 平台）vs uv/Python（Spec Kit）vs Node。
-10. **安全与可复现** — 构建溯源、HTTPS 强制、路径逃逸防护、字节级可复现打包（Spec Kit 的 bundler 极强）。
-11. **锁定程度** — 是否绑定单一平台/云（Kiro 绑定 AWS Bedrock，Spec Kit/OpenSpec 均为 MIT 开源无锁定）。
+| 工具 | VS Code 支持 | IntelliJ IDEA 支持 | 独立插件 | 落地方式 |
+|---|---|---|---|---|
+| **GitHub Spec Kit** | ✅ 最强 | ✅ 强 | ❌（无自有插件） | `/speckit:*` 命令注入 30+ AI 助手（Claude Code、Copilot、Cursor、Junie、Codex、Gemini CLI、Windsurf、通义灵码、Kimi、Trae…） |
+| **OpenSpec** | ✅ 强 | ✅ 中 | ✅ OpenSpec Workbench（VS Code 扩展，含 standalone 网页版） | `/opsx:*` 命令注入 Claude Code / Copilot / Codex / Gemini / Windsurf / OpenCode / Cursor；JetBrains 走 ACP |
+| **AWS Kiro** | ✅ 原生（VS Code fork） | ⚠️ 弱（无原生插件，靠 ACP 接 JetBrains AI Assistant） | ✅ Kiro IDE（fork） | 独立 IDE，或 Kiro CLI + ACP |
+| **BMAD-METHOD** | 🟡 中 | 🟡 中 | ❌ | 多 Agent 框架 + 斜杠命令，依赖外部 Agent 承载 |
+| **Agent OS** | 🟡 中 | 🟡 中 | ❌ | 标准注入（advisory），Claude Code 调优为主 |
+| **Tessl** | — | — | — | closed beta，平台/registry，暂不可生产 |
 
 ---
 
-## 四、重点竞品对比矩阵
+## 三、承载层：VS Code 与 IntelliJ 的 AI 助手插件现状
 
-| 维度 | GitHub Spec Kit | OpenSpec | AWS Kiro | BMAD-METHOD | Agent OS | Tessl |
-|---|---|---|---|---|---|---|
-| **定位** | Agent 无关的 SDD 默认选择 | 轻量 brownfield 增量规格 | 集成式 Agentic IDE | 多 Agent 团队模拟 | 既有代码标准注入 | 规格即平台（前瞻） |
-| **开源/许可** | ✅ MIT | ✅ MIT | ❌ 商业（Bedrock 计量） | ✅ MIT | ✅ MIT | ❌ closed beta |
-| **工作流** | specify→plan→tasks→implement 四阶段 | change→增量→archive | 需求/设计/任务三产物同步 | PRD→架构→故事分片 | 规范注入（advisory） | n/a |
-| **规格格式** | 结构化 Markdown | SHALL/MUST + WHEN/THEN 场景 | EARS 式验收准则 | 超详细故事文件 | 团队规范 | n/a |
-| **变更模型** | 按 feature 全量 | 增量 ADDED/MODIFIED/REMOVED | 三产物同步 | PRD + stories | 无持久 spec | n/a |
-| **宪法/规范继承** | ✅ 核心特性 | 🟡 较弱 | 🟡 | 🟡 | ✅（就是做这个） | n/a |
-| **强制力/门禁** | 约定（无强制） | validate 结构检查（非阻塞） | review-gated（不强制） | 流程 gate（handoff） | advisory only | 平台级 |
-| **Agent 兼容** | ✅ ~30 个 | ✅ 多工具 | ❌ 绑定 Kiro IDE | ✅ 多工具 | 🟡 Claude Code 调优 | n/a |
-| **安装/分发** | uv + Python | 独立二进制（8 平台） | IDE 安装 | Node/agents | CLI | n/a |
-| **安全/可复现** | ✅ 强（bundler） | ✅ 强（签名溯源） | 🟡 | 🟡 | 🟡 | n/a |
-| **greenfield 新项目** | ✅ 优 | 🟡 | ✅ 优 | ✅ 优（重） | ❌ 不适合 | — |
-| **brownfield 存量改造** | 🟡 | ✅ 优 | 🟡 | ❌ 摩擦大 | ✅ 优 | — |
-| **上手成本** | 中（前期问询多） | 低 | 中（需换 IDE） | 高（学习曲线） | 低 | — |
-| **Token 成本** | 高（spec 占 34%） | 低（spec 占 28%） | 中 | 高（spec 占 44%） | 低 | — |
+### VS Code（插件生态最成熟）
+
+| AI 助手插件 | 说明 | SDD 兼容 |
+|---|---|---|
+| **Claude Code**（Anthropic 官方扩展） | 侧边栏面板、内联 diff、checkpoint 回滚、@提及；SDD 工具首推承载 | ✅ Spec Kit / OpenSpec 官方推荐 |
+| **GitHub Copilot** | 微软官方，补全 + Chat + agent | ✅ Spec Kit 原生 / OpenSpec 支持 |
+| **Cursor**（独立编辑器） | Composer 模式适合规格澄清迭代 | ✅ Spec Kit / OpenSpec 均支持 |
+| **Codex**（OpenAI 扩展） | VS Code 官方扩展，需 `--ai-skills` | ✅ 两工具均支持 |
+| **OpenCode / Roo Code / Cline** | 开源、BYOK、多模型 | ✅ OpenSpec 官方支持 |
+
+### IntelliJ IDEA（JetBrains 生态）
+
+| AI 助手插件 | 说明 | SDD 兼容 |
+|---|---|---|
+| **Junie**（JetBrains 官方） | JetBrains 自己的 agentic 层，IDE 原生 + 终端 + CI | ✅ Spec Kit 官方支持（`--ai-commands-dir` / generic） |
+| **Claude Code**（Anthropic 官方插件） | 在 IDE 终端跑 `claude`，接 diff viewer、选择共享、诊断 | ✅ 官方支持 |
+| **Codex**（JetBrains AI Chat 内建） | Read-only / Agent / Agent full access 三模式 | ✅ OpenSpec 支持 |
+| **Kilo Code** | MIT 开源，v7 支持 IntelliJ/WebStorm/PyCharm/GoLand/Rider 等 | 🟡 通用 ACP |
+| **OpenCode**（ACP） | MIT 终端 Agent，经 ACP 接入 JetBrains AI Chat | ✅ OpenSpec 支持 |
+| **AWS Kiro**（ACP） | 经 JetBrains AI Assistant + ACP 接入（无原生插件） | ✅ 自身即 SDD |
+
+> 关键点：IntelliJ 从 2025.2 起内置 **MCP Server**，外部客户端（Claude Code、Codex、Junie、Copilot CLI 等）可自动配置接入，这是 JetBrains 侧 SDD 工具链的底层通道。
 
 ---
 
-## 五、第三方实测数据（Uvik SDD Benchmark 2026 Q4）
+## 四、核心对比维度
 
-50 个生产级 Python ticket 上四工具 vs 无规格对照（来源：uvik.net）：
+1. **插件形态** — 独立插件 vs 斜杠命令注入 vs 独立 IDE（fork）
+2. **VS Code 覆盖度** — 能否直接在 VS Code 侧边栏/终端跑通全流程
+3. **IntelliJ IDEA 覆盖度** — 是否原生插件，还是靠 ACP/MCP 间接接入
+4. **AI 助手承载广度** — 支持多少个 AI 助手（Spec Kit 30+，OpenSpec 8+）
+5. **多工具共存** — 团队成员各用各的编辑器能否统一流程（Spec Kit 强）
+6. **独立 UI** — 有无 dashboard/workbench（OpenSpec Workbench 独有）
+7. **锁定程度** — 是否绑定某云/某 IDE（Kiro 绑定 AWS，其余开源无锁定）
+8. **规格强制力** — 规格是否「约束」代码（多数只是约定，会漂移）
 
-| 指标 | Spec Kit | Kiro | BMAD | OpenSpec | 无规格对照 |
-|---|---|---|---|---|---|
-| **Merge rate（/50）** | 80% | 82% | 82% | **84%** | 72% |
-| **单 ticket 成本（USD）** | $3.33 | $2.35 | $4.23 | **$2.71** | $2.43 |
-| **Spec 漂移率** | 12.5% | 4.9% | 12.2% | **2.4%** | n/a |
-| **每 ticket 返工轮次** | 0.62 | 0.64 | 0.46 | 0.52 | 0.74 |
-| **规格完整性（/8）** | 6 | 7 | 7 | 7 | 0 |
-| **工程师复用意愿** | 4/5 | 4/5 | 3/5 | **5/5** | n/a |
+---
+
+## 五、重点竞品对比矩阵
+
+| 维度 | GitHub Spec Kit | OpenSpec | AWS Kiro | BMAD-METHOD |
+|---|---|---|---|---|
+| **插件形态** | 命令层（无自有插件） | 命令层 + Workbench 扩展 | 独立 IDE（VS Code fork） | 命令层（无自有插件） |
+| **VS Code** | ✅ 最强（30+ 助手） | ✅ 强（8+ 助手 + 自有扩展） | ✅ 原生（fork） | 🟡 中 |
+| **IntelliJ IDEA** | ✅ 强（Junie/Claude/Codex） | 🟡 中（ACP） | ⚠️ 弱（ACP 间接） | 🟡 中 |
+| **独立 UI/Dashboard** | ❌ | ✅ Workbench | ✅ IDE 内建 | ❌ |
+| **AI 助手承载** | 30+（最多） | 8+ | 绑定 Kiro | 多 Agent 框架 |
+| **多工具共存** | ✅ 最强 | ✅ | ❌ 单 IDE | 🟡 |
+| **开源/锁定** | MIT 无锁定 | MIT 无锁定 | ❌ AWS 锁定 | MIT 无锁定 |
+| **社区/生态** | ~14 万 star，GitHub 背书 | ~7 万 star | AWS 官方 | ~3.7 万 star |
+| **上手成本** | 中（前期问询多） | 低 | 中（换 IDE） | 高 |
+
+---
+
+## 六、选型建议（按编辑器生态）
+
+### 决策树
+
+| 你的团队现状 | 推荐 SDD 工具 | 推荐承载插件 |
+|---|---|---|
+| **VS Code 为主** | OpenSpec 或 Spec Kit | Claude Code（首选）+ Copilot 共存 |
+| **IntelliJ IDEA 为主** | **GitHub Spec Kit**（对 Junie/Claude 支持最全） | Junie（官方）+ Claude Code 插件 |
+| **VS Code + IntelliJ 混用** | **GitHub Spec Kit**（多工具共存最强） | 各自原生助手，规格统一 |
+| **深度 AWS 生态** | Kiro | Kiro IDE（VS Code 侧）/ CLI+ACP（JetBrains 侧） |
+| **要独立 dashboard 监督 Agent** | OpenSpec + Workbench | Claude/Copilot/Codex/Gemini 任选 |
 
 ### 关键结论
 
-- **规格在「3 个文件以上」的 ticket 上才回本**：小 ticket（1-2 文件）规格成本 > 它避免的返工；中型（3-5 文件）规格臂 85% vs 对照 70%；大型（6+ 文件）80% vs 50%。
-- **规格收益集中在 feature 和 data-pipeline 类 ticket**（+30pp），bug-fix / refactor 类几乎零收益（0pp）。
-- **OpenSpec 漂移率最低（2.4%）、复用意愿最高（5/5）**，性价比突出。
+1. **VS Code 团队选 OpenSpec**：插件生态最灵活（8+ 助手 + 自有 Workbench 扩展），上手最轻、漂移最低。
+2. **IntelliJ IDEA 团队选 Spec Kit**：它对 JetBrains 生态（Junie、Claude Code 插件、Codex）的命令注入最完整，多工具共存能力是硬需求场景下的最优解。
+3. **混编团队（最常见）选 Spec Kit**：30+ AI 助手统一接口，`--ai-commands-dir` 可让成员各用各的编辑器，规格资产仍共享一份。
 
 ---
 
-## 六、选型建议
+## 七、推荐插件清单（可直接落地）
 
-### 规则总纲
+### VS Code 侧
 
-> **写规格先行，review 的是规格而非 diff，让意图而非氛围驱动 Agent。**
-
-### 按场景匹配（决策树）
-
-| 场景 | 推荐 | 理由 |
+| 插件 | 用途 | 安装 |
 |---|---|---|
-| 新项目、要严谨、跨技术栈 | **GitHub Spec Kit** | 社区最大、Agent 支持最广、constitution 规范继承 |
-| 存量代码持续演进、要轻 | **OpenSpec** | 增量模型专为 brownfield、上手快、漂移低 |
-| 深度 AWS 生态 | Kiro | 集成体验好，但锁定 Bedrock、计量收费 |
-| 复杂绿地产品、要纸面留痕 | BMAD-METHOD | 全流程团队模拟 + 合规证据，但最重、最贵 |
-| 只想让 Agent 遵守现有规范 | Agent OS | 标准注入，不做持久 spec |
-| Phoenix/Elixir 强验证 | CodeMySpec | 强制 BDD 门禁 |
+| **Claude Code** | SDD 首选承载 Agent，读 spec 写代码 | 扩展市场搜「Claude Code」 |
+| **GitHub Copilot / Copilot Chat** | 补全 + agent，Spec Kit 原生集成 | 市场搜「GitHub Copilot」 |
+| **OpenSpec Workbench** | OpenSpec 的 dashboard，监督/启动 Agent | openspec-ui.dev 下载 VSIX |
+| **Codex**（可选） | 需要 `--ai-skills` 时用 | 市场搜「Codex」 |
 
-### 对本项目（NII NL2Query）的落地建议
+### IntelliJ IDEA 侧
 
-1. **选型倾向：OpenSpec 为主、Spec Kit 为辅。** 本项目是「存量代码 + 受治理口径 + human-in-the-loop」的成熟 PoC，恰好命中 OpenSpec 的强项（brownfield 增量、漂移低、轻量）。Spec Kit 的 constitution 可用于沉淀全局规范（如「LLM 不直写裸 SQL」）。
+| 插件 | 用途 | 安装 |
+|---|---|---|
+| **Junie** | JetBrains 官方 agentic 层，SDD 承载 | 市场搜「Junie」 |
+| **Claude Code**（Anthropic 官方） | 终端跑 claude + diff viewer | 市场搜「Claude Code」 |
+| **Codex**（AI Chat 内建） | 三权限模式 agent | AI Chat 内选择 |
+| **Kilo Code**（可选） | MIT 开源多模型 agent | 市场搜「Kilo Code」 |
+| **OpenCode**（ACP） | 开源终端 Agent 接 AI Chat | 配 acp.json |
 
-2. **优先对「大 ticket」上规格。** 结合 benchmark 结论，对涉及 `app/graph.py`、`metrics.py`、`opencode_sql.py` 多文件联动的改动先写 spec；单文件小修不强行上规格。
+### CLI（两侧通用，规格资产核心）
 
-3. **把「受治理口径」翻译成 spec 的强制约束。** 用 SHALL/MUST 表达「SQL 必须由 metrics.py 确定性拼装、LLM 不得直写裸 SQL」「高危 SQL 必须 interrupt 人工审批」，让规格成为合规证据链的一部分。
-
-4. **先试点后推广。** 挑一个 feature（如 adhoc 分支的 sql_guard 增强）跑通 OpenSpec 的 change→archive 闭环，验证增量模型与现有 LangGraph 状态图的可审计性是否契合，再决定是否全量铺开。
+- **Spec Kit CLI**：`uvx --from git+https://github.com/github/spec-kit.git specify init`
+- **OpenSpec CLI**：`npm i -g @fission-ai/openspec` 或独立二进制
+- **Kiro CLI**：`curl -fsSL https://cli.kiro.dev/install | bash`
 
 ---
 
-## 七、下一步行动
+## 八、下一步行动
 
-- [ ] 安装 OpenSpec，在 `doc/` 旁建 `openspec/` 目录跑通首个 change 闭环
-- [ ] 用 constitution（Spec Kit 概念）沉淀 3-5 条全局研发规范
-- [ ] 选定 1 个多文件 feature 做 SDD 试点，量化 merge rate / 返工轮次
-- [ ] 评估「受治理指标口径」与 spec 强制约束的映射，形成合规证据链
+- [ ] 确认团队主力编辑器（VS Code / IntelliJ 占比）
+- [ ] 按第六节决策树选定 SDD 工具（倾向：混编选 Spec Kit，纯 VS Code 选 OpenSpec）
+- [ ] 在对应编辑器装 1 个 AI 助手插件 + 1 个 SDD CLI，跑通一个 feature 的完整闭环
+- [ ] 用 constitution / 全局规范沉淀研发约定，验证多编辑器规格一致性
 
 ---
 
 ## 参考来源
 
-- GitHub Spec Kit: https://github.com/github/spec-kit
-- GitHub 官方 SDD 博客: https://github.blog/ai-and-ml/generative-ai/spec-driven-development-with-ai-get-started-with-a-new-open-source-toolkit/
+- GitHub Spec Kit: https://github.com/github/spec-kit（~14 万 star，30+ AI 助手集成）
 - OpenSpec: https://github.com/Fission-AI/OpenSpec（openspec.dev）
-- AWS Kiro: https://kiro.dev/
+- OpenSpec Workbench: https://openspec-ui.dev/（VS Code 扩展 + standalone）
+- AWS Kiro: https://kiro.dev/（VS Code fork，JetBrains 走 ACP）
+- JetBrains Junie / MCP Server: https://www.jetbrains.com/help/idea/mcp-server.html
 - BMAD-METHOD: https://github.com/bmad-code-org/BMAD-METHOD
-- Uvik SDD Benchmark 2026 Q4: https://uvik.net/spec-driven-development-benchmark
 - SDD 工具横向对比: https://codemyspec.com/blog/best-spec-driven-development-tools
